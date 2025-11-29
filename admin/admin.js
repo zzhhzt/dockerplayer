@@ -83,18 +83,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.siteTitle) {
                     siteTitleInput.value = data.siteTitle;
                 }
+                if (data.allowedOrigins && Array.isArray(data.allowedOrigins)) {
+                    const allowedOriginsInput = document.getElementById('allowedOriginsInput');
+                    if (allowedOriginsInput) {
+                        allowedOriginsInput.value = data.allowedOrigins.join(', ');
+                    }
+                }
             });
     }
 
     saveSettingsBtn.addEventListener('click', () => {
         const title = siteTitleInput.value;
+        const allowedOriginsInput = document.getElementById('allowedOriginsInput');
+        let allowedOrigins = [];
+
+        if (allowedOriginsInput && allowedOriginsInput.value.trim()) {
+            allowedOrigins = allowedOriginsInput.value
+                .split(',')
+                .map(origin => origin.trim())
+                .filter(origin => origin.length > 0);
+        }
+
         fetch('/api/settings', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'x-admin-password': adminPassword
             },
-            body: JSON.stringify({ siteTitle: title })
+            body: JSON.stringify({
+                siteTitle: title,
+                allowedOrigins: allowedOrigins
+            })
         })
             .then(res => {
                 if (res.ok) alert('设置已保存');

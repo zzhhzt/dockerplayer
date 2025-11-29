@@ -7,6 +7,7 @@ require('dotenv').config();
 
 // Rate limiting
 const rateLimit = require('express-rate-limit');
+const crypto = require('crypto');
 
 // General rate limiting
 const generalLimiter = rateLimit({
@@ -22,6 +23,91 @@ const authLimiter = rateLimit({
     message: { error: 'Too many authentication attempts, please try again later' }
 });
 
+// Media file rate limiting (stricter)
+const mediaLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 20, // limit each IP to 20 media requests per minute
+    message: { error: 'Too many media requests' }
+});
+
+// Store temporary signed URLs
+const signedUrls = new Map();
+const CLEANUP_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
+// Clean up expired signed URLs
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, data] of signedUrls.entries()) {
+        if (data.expiry < now) {
+            signedUrls.delete(key);
+        }
+    }
+}, CLEANUP_INTERVAL);
+
+// Generate obfuscated signed URL for media access
+function generateSignedUrl(filename, duration = 60000) { // 1 minute default
+    const timestamp = Date.now();
+    const random = crypto.randomBytes(32).toString('hex');
+    const expiry = timestamp + duration;
+
+    // Create a more complex signature with multiple factors
+    const data = `${filename}:${timestamp}:${random}:${expiry}`;
+    const signature = crypto.createHmac('sha256', ADMIN_PASSWORD)
+        .update(data)
+        .digest('hex');
+
+    // Store the minimal required data
+    signedUrls.set(random, { filename, expiry, timestamp });
+
+    // Create an obfuscated URL that doesn't reveal the structure
+    const params = Buffer.from(`${random}:${signature}:${expiry}`).toString('base64')
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+
+    return `/stream/${params}`;
+}
+
+// Verify obfuscated signed URL
+function verifyObfuscatedUrl(params) {
+    try {
+        // Decode the obfuscated parameters
+        const decoded = Buffer.from(params.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString();
+        const [random, signature, expiryStr] = decoded.split(':');
+
+        if (!random || !signature || !expiryStr) {
+            return false;
+        }
+
+        const expiry = parseInt(expiryStr);
+        if (isNaN(expiry) || Date.now() > expiry) {
+            return false;
+        }
+
+        const data = signedUrls.get(random);
+        if (!data || data.expiry !== expiry) {
+            return false;
+        }
+
+        // Verify the signature
+        const expectedSignature = crypto.createHmac('sha256', ADMIN_PASSWORD)
+            .update(`${data.filename}:${data.timestamp}:${random}:${expiry}`)
+            .digest('hex');
+
+        if (signature !== expectedSignature) {
+            signedUrls.delete(random);
+            return false;
+        }
+
+        // Return the filename and clean up
+        const filename = data.filename;
+        signedUrls.delete(random);
+        return filename;
+
+    } catch (error) {
+        console.error('URL verification error:', error);
+        return false;
+    }
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MUSIC_DIR = path.join(__dirname, 'music');
@@ -30,6 +116,80 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin'; // Default fallbac
 // Ensure music directory exists
 if (!fs.existsSync(MUSIC_DIR)) {
     fs.mkdirSync(MUSIC_DIR);
+}
+
+// Enhanced anti-hotlinking middleware
+function antiHotlinking(req, res, next) {
+    const referer = req.headers.referer || req.headers.referrer;
+    const userAgent = req.headers['user-agent'] || '';
+    const origin = req.headers.origin;
+    const host = req.headers.host;
+
+    // Get allowed origins from settings
+    const allowedOrigins = getAllowedOrigins();
+
+    // Check if request is from allowed origin
+    let isValidOrigin = false;
+    if (referer) {
+        try {
+            const refererUrl = new URL(referer);
+            isValidOrigin = refererUrl.host === host || allowedOrigins.includes(refererUrl.host);
+        } catch (e) {
+            // Invalid referer URL
+        }
+    } else if (origin) {
+        try {
+            const originUrl = new URL(origin);
+            isValidOrigin = originUrl.host === host || allowedOrigins.includes(originUrl.host);
+        } catch (e) {
+            // Invalid origin URL
+        }
+    }
+
+    // Allow same origin and configured origins
+    if (isValidOrigin) {
+        return next();
+    }
+
+    // Check for signed media request (these go through additional verification)
+    const isSignedMediaRequest = req.path.startsWith('/stream/') || req.path.startsWith('/api/media/');
+
+    if (isSignedMediaRequest) {
+        // For signed requests, allow common browsers only
+        const allowedUserAgents = [
+            /mozilla/i, /webkit/i, /chrom(e|ium)/i, /safari/i,
+            /firefox/i, /edge/i, /opera/i, /android/i, /iphone/i, /ipad/i
+        ];
+
+        const isAllowedUA = allowedUserAgents.some(ua => ua.test(userAgent));
+
+        if (isAllowedUA) {
+            return next();
+        }
+    }
+
+    // Block suspicious patterns
+    const blockedPatterns = [
+        /bot/i, /crawler/i, /spider/i, /scraper/i, /curl/i, /wget/i,
+        /python/i, /java/i, /php/i, /node/i, /ruby/i, /go-http/i
+    ];
+
+    const isBlockedUA = blockedPatterns.some(pattern => pattern.test(userAgent));
+    if (isBlockedUA) {
+        return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Block requests with no proper identification
+    if (!userAgent && !isSignedMediaRequest) {
+        return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // For all other cases, require signed URL
+    if (!isSignedMediaRequest) {
+        return res.status(403).json({ error: 'Access denied' });
+    }
+
+    next();
 }
 
 // Security middleware
@@ -57,16 +217,54 @@ app.use((req, res, next) => {
     next();
 });
 
-// Middleware
+// Middleware with dynamic CORS
 app.use(cors({
-    origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : '*',
+    origin: (origin, callback) => {
+        // Allow requests with no origin (mobile apps, etc.)
+        if (!origin) return callback(null, true);
+
+        const allowedOrigins = getAllowedOrigins();
+        if (allowedOrigins.length === 0) {
+            // If no origins specified, allow all
+            return callback(null, true);
+        }
+
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        } else {
+            return callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(generalLimiter); // Apply general rate limiting
 app.use(express.static('public')); // Serve public player
 app.use('/admin', express.static('admin')); // Serve admin panel
-app.use('/music', express.static(MUSIC_DIR)); // Serve music files
+
+// Protected music file serving with anti-hotlinking
+app.use('/music', mediaLimiter, antiHotlinking, express.static(MUSIC_DIR, {
+    setHeaders: (res, filePath) => {
+        // Prevent caching and add security headers
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+
+        // Set content type based on file extension
+        const ext = path.extname(filePath).toLowerCase();
+        const mimeTypes = {
+            '.mp3': 'audio/mpeg',
+            '.wav': 'audio/wav',
+            '.ogg': 'audio/ogg',
+            '.m4a': 'audio/mp4'
+        };
+
+        if (mimeTypes[ext]) {
+            res.setHeader('Content-Type', mimeTypes[ext]);
+        }
+    }
+}));
 
 // File upload security settings
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB limit
@@ -212,7 +410,7 @@ app.get('/api/playlist', (req, res) => {
             return ['.mp3', '.wav', '.ogg', '.m4a'].includes(ext) && !hiddenFiles.includes(file);
         }).map(file => ({
             name: file,
-            url: `/music/${encodeURIComponent(file)}`
+            url: generateSignedUrl(file) // Use signed URL instead of direct path
         }));
 
         res.json(musicFiles);
@@ -292,13 +490,20 @@ if (!fs.existsSync(DATA_DIR)) {
 
 function getSettings() {
     if (!fs.existsSync(SETTINGS_FILE)) {
-        return { siteTitle: 'Scan to Listen' };
+        return { siteTitle: 'Scan to Listen', allowedOrigins: [] };
     }
     try {
         return JSON.parse(fs.readFileSync(SETTINGS_FILE));
     } catch (e) {
-        return { siteTitle: 'Scan to Listen' };
+        return { siteTitle: 'Scan to Listen', allowedOrigins: [] };
     }
+}
+
+function getAllowedOrigins() {
+    const settings = getSettings();
+    const envOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : [];
+    const settingsOrigins = settings.allowedOrigins || [];
+    return [...new Set([...envOrigins, ...settingsOrigins])];
 }
 
 function saveSettings(settings) {
@@ -371,7 +576,7 @@ app.get('/api/admin/playlist', checkAuth, (req, res) => {
             return ['.mp3', '.wav', '.ogg', '.m4a'].includes(ext);
         }).map(file => ({
             name: file,
-            url: `/music/${encodeURIComponent(file)}`,
+            url: generateSignedUrl(file), // Use signed URL for admin too
             hidden: hiddenFiles.includes(file)
         }));
 
@@ -379,7 +584,70 @@ app.get('/api/admin/playlist', checkAuth, (req, res) => {
     });
 });
 
-// 8. Toggle File Visibility (Protected)
+// 8. Get Media File via Obfuscated URL
+app.get('/stream/:params', mediaLimiter, antiHotlinking, (req, res) => {
+    const { params } = req.params;
+
+    // Verify the obfuscated URL and get filename
+    const filename = verifyObfuscatedUrl(params);
+    if (!filename) {
+        return res.status(403).json({ error: 'Invalid or expired media URL' });
+    }
+
+    // Validate filename
+    if (!validateFilename(filename)) {
+        return res.status(400).json({ error: 'Invalid filename' });
+    }
+
+    const filepath = path.join(MUSIC_DIR, filename);
+
+    // Security check: prevent directory traversal
+    if (!validatePath(filepath, MUSIC_DIR)) {
+        return res.status(403).json({ error: 'Invalid file path' });
+    }
+
+    if (!fs.existsSync(filepath)) {
+        return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Set enhanced security headers
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Access-Control-Allow-Credentials', 'false');
+
+    // Set content type
+    const ext = path.extname(filename).toLowerCase();
+    const mimeTypes = {
+        '.mp3': 'audio/mpeg',
+        '.wav': 'audio/wav',
+        '.ogg': 'audio/ogg',
+        '.m4a': 'audio/mp4'
+    };
+
+    if (mimeTypes[ext]) {
+        res.setHeader('Content-Type', mimeTypes[ext]);
+    }
+
+    // Stream the file with error handling
+    const fileStream = fs.createReadStream(filepath);
+    fileStream.pipe(res);
+
+    fileStream.on('error', (error) => {
+        console.error('File stream error:', error);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Failed to stream file' });
+        }
+    });
+});
+
+// Legacy support for old URL format (will be removed in future)
+app.get('/api/media/:id/:signature/:filename', mediaLimiter, antiHotlinking, (req, res) => {
+    return res.status(410).json({ error: 'Legacy URL format no longer supported' });
+});
+
+// 9. Toggle File Visibility (Protected)
 app.put('/api/music/:filename/visibility', checkAuth, (req, res) => {
     const filename = req.params.filename;
     const { hidden } = req.body;

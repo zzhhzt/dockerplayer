@@ -306,18 +306,26 @@ button:hover {
 }
 
 .settings-section {
-    align-items: center;
+    margin-bottom: 15px;
 }
 
 .settings-section label {
     margin-right: 10px;
-    margin-bottom: 0;
+    margin-bottom: 5px;
+    display: block;
+    font-weight: 500;
 }
 
 .settings-section input[type="text"] {
-    flex: 1;
-    min-width: 200px;
-    margin: 0;
+    width: 100%;
+    margin-bottom: 5px;
+}
+
+.settings-section small {
+    color: #6b7280;
+    font-size: 0.8rem;
+    display: block;
+    margin-top: 5px;
 }
 
 /* QR Song Name */
