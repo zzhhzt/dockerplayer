@@ -17,6 +17,24 @@ if (!fs.existsSync(MUSIC_DIR)) {
 
 // Middleware
 app.use(cors());
+app.use(express.json());
+app.use(express.static('public')); // Serve public player
+app.use('/admin', express.static('admin')); // Serve admin panel
+app.use('/music', express.static(MUSIC_DIR)); // Serve music files
+
+// Multer setup for file uploads
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, MUSIC_DIR);
+    },
+    filename: (req, file, cb) => {
+        // Use original name directly. Modern browsers send UTF-8.
+        cb(null, file.originalname);
+    }
+});
+const upload = multer({ storage: storage });
+
+// Auth Middleware
 const checkAuth = (req, res, next) => {
     const password = req.headers['x-admin-password'] || req.query.password;
     if (password === ADMIN_PASSWORD) {
