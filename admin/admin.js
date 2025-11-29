@@ -506,22 +506,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const options = {
             text: url,
-            width: 250,
-            height: 250,
+            width: 180,
+            height: 180,
             colorDark: qrColorDark.value,
             colorLight: qrColorLight.value,
             correctLevel: QRCode.CorrectLevel.H, // High error correction for logos
             logo: currentLogo,
-            logoWidth: 60,
-            logoHeight: 60,
+            logoWidth: 40,
+            logoHeight: 40,
             logoBackgroundColor: '#ffffff',
             logoBackgroundTransparent: false,
             title: qrTitleInput.value,
-            titleFont: "bold 16px Arial",
+            titleFont: "bold 12px Arial",
             titleColor: "#000000",
             titleBackgroundColor: "#ffffff",
-            titleHeight: 40,
-            titleTop: 30
+            titleHeight: 25,
+            titleTop: 20
         };
 
         if (typeof QRCode === 'undefined') {

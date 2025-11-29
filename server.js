@@ -156,6 +156,16 @@ function antiHotlinking(req, res, next) {
         return next();
     }
 
+    // Special handling for mobile browsers accessing signed media
+    const isMobileUA = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(userAgent);
+    const isSignedMediaRequest = req.path.startsWith('/api/stream/') || req.path.startsWith('/stream/') || req.path.startsWith('/api/media/');
+
+    // Allow mobile browsers to access signed media more easily
+    if (isSignedMediaRequest && isMobileUA) {
+        console.log(`Allowing mobile signed media request from ${clientIP}`);
+        return next();
+    }
+
     // Get allowed origins from settings
     const allowedOrigins = getAllowedOrigins();
 
@@ -182,9 +192,6 @@ function antiHotlinking(req, res, next) {
         return next();
     }
 
-    // Check for signed media request (these go through additional verification)
-    const isSignedMediaRequest = req.path.startsWith('/api/stream/') || req.path.startsWith('/stream/') || req.path.startsWith('/api/media/');
-
     if (isSignedMediaRequest) {
         // For signed requests, allow all but obvious bots
         const blockedPatterns = [
@@ -197,6 +204,8 @@ function antiHotlinking(req, res, next) {
         }
 
         // Allow signed requests to pass through for verification
+        // Mobile browsers often don't send referer/origin headers, but signed URL is sufficient
+        console.log(`Allowing signed media request from ${clientIP} UA: ${userAgent.substring(0, 50)}`);
         return next();
     }
 
