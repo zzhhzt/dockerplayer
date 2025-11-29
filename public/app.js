@@ -95,26 +95,48 @@ document.addEventListener('DOMContentLoaded', () => {
                 const targetFile = files.find(f => f.name === filename);
                 if (targetFile) {
                     console.log('Found target file:', targetFile);
-                    // For mobile, show play overlay immediately to ensure user interaction
+                    // Set up the audio player first
+                    currentTitle.textContent = targetFile.name;
+                    console.log('Setting audio source to:', targetFile.url);
+                    audioPlayer.src = targetFile.url;
+
+                    // For mobile, show play overlay with direct play callback
                     if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
                         showPlayOverlay(() => {
-                            playTrack(targetFile, null);
-                            loadPlaylist();
+                            console.log('Mobile play overlay clicked, attempting direct play...');
+                            audioPlayer.play().then(() => {
+                                console.log('Mobile play successful');
+                                loadPlaylist();
+                                // Find and highlight the actual list item when playlist loads
+                                setTimeout(() => {
+                                    const actualLi = Array.from(playlistEl.children).find(li => li.textContent.includes(filename));
+                                    if (actualLi) {
+                                        actualLi.classList.add('active');
+                                    }
+                                }, 500);
+                            }).catch(error => {
+                                console.error('Mobile direct play failed:', error);
+                                handlePlayError(error, targetFile);
+                            });
                         });
                     } else {
-                        // Create a temporary list item for the active state
-                        const tempLi = document.createElement('li');
-                        playTrack(targetFile, tempLi);
+                        // For desktop, try to play directly
+                        const playPromise = audioPlayer.play();
+                        if (playPromise !== undefined) {
+                            playPromise.catch(error => {
+                                console.error('Desktop play error:', error);
+                                handlePlayError(error, targetFile);
+                            });
+                        }
                         loadPlaylist();
                     }
 
-                    // Find and highlight the actual list item when playlist loads
-                    setTimeout(() => {
-                        const actualLi = Array.from(playlistEl.children).find(li => li.textContent.includes(filename));
-                        if (actualLi) {
-                            actualLi.classList.add('active');
-                        }
-                    }, 500);
+                    // Animation
+                    if (albumArt) {
+                        albumArt.style.animation = 'none';
+                        albumArt.offsetHeight; /* trigger reflow */
+                        albumArt.style.animation = 'pulse 2s infinite';
+                    }
                 } else {
                     // Song not found or hidden, load normal playlist
                     console.log('Song not found:', filename);
@@ -144,8 +166,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // For mobile browsers, we need user interaction to play audio
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-        if (isMobile) {
-            // For mobile, always show play overlay to ensure user interaction
+        if (isMobile && !liElement) {
+            // Only show overlay for direct mobile plays (not from playlist clicks)
             setTimeout(() => {
                 showPlayOverlay(() => {
                     audioPlayer.play().catch(error => {
@@ -155,11 +177,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }, 100);
         } else {
-            // For desktop, try to play directly
+            // For desktop or playlist clicks, try to play directly
             const playPromise = audioPlayer.play();
             if (playPromise !== undefined) {
                 playPromise.catch(error => {
-                    console.error('Desktop audio play error:', error);
+                    console.error('Audio play error:', error);
                     handlePlayError(error, file);
                 });
             }
@@ -217,17 +239,18 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             overlay.innerHTML = `
                 <div style="font-size: 60px; color: white; margin-bottom: 10px;">▶️</div>
-                <div style="color: white; font-size: 16px;">点击播放</div>
+                <div style="color: white; font-size: 16px;">点击播放音乐</div>
             `;
             document.body.appendChild(overlay);
 
             overlay.addEventListener('click', () => {
                 overlay.style.display = 'none';
-                console.log('Play overlay clicked, attempting to play...');
+                console.log('🎵 Play overlay clicked, executing callback...');
                 callback();
             });
         } else {
             overlay.style.display = 'flex';
+            console.log('🎵 Showed existing play overlay');
         }
     }
 });
