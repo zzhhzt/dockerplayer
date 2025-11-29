@@ -29,36 +29,61 @@
         </div>
 
         <div class="dashboard-content">
-            <!-- 文件上传区域 -->
-            <div class="card">
-                <h3>📤 上传音乐</h3>
-                <div class="upload-section">
-                    <input type="file" id="fileInput" accept=".mp3,.wav,.ogg,.m4a">
-                    <button id="uploadBtn">上传</button>
+            <!-- 上传和设置区域并排 -->
+            <div class="row">
+                <!-- 文件上传区域 -->
+                <div class="card upload-card">
+                    <h3>📤 上传音乐</h3>
+                    <div class="upload-section">
+                        <div class="upload-area" id="uploadArea">
+                            <input type="file" id="fileInput" accept=".mp3,.wav,.ogg,.m4a" multiple>
+                            <div class="upload-prompt">
+                                <div class="upload-icon">📁</div>
+                                <p>点击选择文件或拖拽到此处</p>
+                                <small>支持 MP3、WAV、OGG、M4A 格式，可多选</small>
+                            </div>
+                        </div>
+                        <div class="upload-controls">
+                            <button id="uploadBtn" class="upload-btn">开始上传</button>
+                            <button id="clearBtn" class="clear-btn">清空</button>
+                        </div>
+                        <div id="uploadStatus" class="upload-status"></div>
+                        <div id="uploadProgress" class="upload-progress" style="display: none;">
+                            <div class="progress-bar">
+                                <div class="progress-fill"></div>
+                            </div>
+                            <span class="progress-text">0%</span>
+                        </div>
+                    </div>
                 </div>
-                <p id="uploadStatus"></p>
-            </div>
 
-            <!-- 设置区域 -->
-            <div class="card">
-                <h3>⚙️ 网站设置</h3>
-                <div class="settings-section">
-                    <label>网站标题:</label>
-                    <input type="text" id="siteTitleInput" placeholder="输入网站标题">
-                </div>
-                <div class="settings-section">
-                    <label>允许的域名 (防盗链):</label>
-                    <input type="text" id="allowedOriginsInput" placeholder="例如: https://yoursite.com, https://www.yoursite.com">
-                    <small>留空允许所有域名访问，多个域名用逗号分隔</small>
-                </div>
-                <div class="settings-section">
-                    <button id="saveSettingsBtn">保存设置</button>
+                <!-- 设置区域 -->
+                <div class="card settings-card">
+                    <h3>⚙️ 网站设置</h3>
+                    <div class="settings-section">
+                        <label>网站标题:</label>
+                        <input type="text" id="siteTitleInput" placeholder="输入网站标题">
+                    </div>
+                    <div class="settings-section">
+                        <label>允许的域名 (防盗链):</label>
+                        <input type="text" id="allowedOriginsInput" placeholder="例如: https://yoursite.com">
+                        <small>留空允许所有域名访问，多个域名用逗号分隔</small>
+                    </div>
+                    <div class="settings-section">
+                        <button id="saveSettingsBtn" class="save-btn">保存设置</button>
+                    </div>
                 </div>
             </div>
 
             <!-- 文件列表区域 -->
             <div class="card list-card">
-                <h3>📂 现有歌曲列表</h3>
+                <div class="list-header">
+                    <h3>📂 现有歌曲列表</h3>
+                    <div class="list-actions">
+                        <button id="selectAllBtn" class="select-btn">全选</button>
+                        <button id="deleteSelectedBtn" class="batch-delete-btn" disabled>删除选中</button>
+                    </div>
+                </div>
                 <ul id="fileList" class="file-list">
                     <!-- Files will be listed here -->
                 </ul>

@@ -45,9 +45,9 @@ setInterval(() => {
 }, CLEANUP_INTERVAL);
 
 // Generate obfuscated signed URL for media access
-function generateSignedUrl(filename, duration = 60000) { // 1 minute default
+function generateSignedUrl(filename, duration = 300000) { // 5 minutes for better compatibility
     const timestamp = Date.now();
-    const random = crypto.randomBytes(32).toString('hex');
+    const random = crypto.randomBytes(16).toString('hex');
     const expiry = timestamp + duration;
 
     // Create a more complex signature with multiple factors
@@ -63,7 +63,7 @@ function generateSignedUrl(filename, duration = 60000) { // 1 minute default
     const params = Buffer.from(`${random}:${signature}:${expiry}`).toString('base64')
         .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 
-    return `/stream/${params}`;
+    return `/api/stream/${params}`;
 }
 
 // Verify obfuscated signed URL
@@ -124,6 +124,28 @@ function antiHotlinking(req, res, next) {
     const userAgent = req.headers['user-agent'] || '';
     const origin = req.headers.origin;
     const host = req.headers.host;
+    const clientIP = req.ip || req.connection.remoteAddress || req.socket.remoteAddress;
+
+    // Check if it's an internal/private IP address
+    function isInternalIP(ip) {
+        // Private IP ranges
+        const privateRanges = [
+            /^10\./,           // 10.0.0.0/8
+            /^172\.(1[6-9]|2[0-9]|3[0-1])\./, // 172.16.0.0/12
+            /^192\.168\./,    // 192.168.0.0/16
+            /^127\./,         // 127.0.0.0/8 (localhost)
+            /^169\.254\./,    // 169.254.0.0/16 (link-local)
+            /^::1$/,          // IPv6 localhost
+            /^fc00:/,         // IPv6 private
+        ];
+        return privateRanges.some(range => range.test(ip));
+    }
+
+    // Allow internal IPs automatically
+    if (isInternalIP(clientIP) || isInternalIP(host.split(':')[0])) {
+        console.log(`Allowing internal IP access: ${clientIP}`);
+        return next();
+    }
 
     // Get allowed origins from settings
     const allowedOrigins = getAllowedOrigins();
@@ -152,23 +174,24 @@ function antiHotlinking(req, res, next) {
     }
 
     // Check for signed media request (these go through additional verification)
-    const isSignedMediaRequest = req.path.startsWith('/stream/') || req.path.startsWith('/api/media/');
+    const isSignedMediaRequest = req.path.startsWith('/api/stream/') || req.path.startsWith('/stream/') || req.path.startsWith('/api/media/');
 
     if (isSignedMediaRequest) {
-        // For signed requests, allow common browsers only
-        const allowedUserAgents = [
-            /mozilla/i, /webkit/i, /chrom(e|ium)/i, /safari/i,
-            /firefox/i, /edge/i, /opera/i, /android/i, /iphone/i, /ipad/i
+        // For signed requests, allow all but obvious bots
+        const blockedPatterns = [
+            /bot/i, /crawler/i, /spider/i, /scraper/i
         ];
 
-        const isAllowedUA = allowedUserAgents.some(ua => ua.test(userAgent));
-
-        if (isAllowedUA) {
-            return next();
+        const isBlockedUA = blockedPatterns.some(pattern => pattern.test(userAgent));
+        if (isBlockedUA) {
+            return res.status(403).json({ error: 'Access denied' });
         }
+
+        // Allow signed requests to pass through for verification
+        return next();
     }
 
-    // Block suspicious patterns
+    // Block suspicious patterns for non-signed requests
     const blockedPatterns = [
         /bot/i, /crawler/i, /spider/i, /scraper/i, /curl/i, /wget/i,
         /python/i, /java/i, /php/i, /node/i, /ruby/i, /go-http/i
@@ -180,16 +203,12 @@ function antiHotlinking(req, res, next) {
     }
 
     // Block requests with no proper identification
-    if (!userAgent && !isSignedMediaRequest) {
+    if (!userAgent) {
         return res.status(403).json({ error: 'Access denied' });
     }
 
     // For all other cases, require signed URL
-    if (!isSignedMediaRequest) {
-        return res.status(403).json({ error: 'Access denied' });
-    }
-
-    next();
+    return res.status(403).json({ error: 'Access denied' });
 }
 
 // Security middleware
@@ -222,6 +241,32 @@ app.use(cors({
     origin: (origin, callback) => {
         // Allow requests with no origin (mobile apps, etc.)
         if (!origin) return callback(null, true);
+
+        // Check if it's an internal IP
+        function isInternalOrigin(originUrl) {
+            try {
+                const url = new URL(originUrl);
+                const hostname = url.hostname;
+
+                // Private IP ranges
+                const privateRanges = [
+                    /^10\./,           // 10.0.0.0/8
+                    /^172\.(1[6-9]|2[0-9]|3[0-1])\./, // 172.16.0.0/12
+                    /^192\.168\./,    // 192.168.0.0/16
+                    /^127\./,         // 127.0.0.0/8 (localhost)
+                    /^localhost$/,    // localhost
+                    /^169\.254\./,    // 169.254.0.0/16 (link-local)
+                ];
+                return privateRanges.some(range => range.test(hostname));
+            } catch (e) {
+                return false;
+            }
+        }
+
+        // Auto-allow internal origins
+        if (isInternalOrigin(origin)) {
+            return callback(null, true);
+        }
 
         const allowedOrigins = getAllowedOrigins();
         if (allowedOrigins.length === 0) {
@@ -585,12 +630,14 @@ app.get('/api/admin/playlist', checkAuth, (req, res) => {
 });
 
 // 8. Get Media File via Obfuscated URL
-app.get('/stream/:params', mediaLimiter, antiHotlinking, (req, res) => {
+app.get('/api/stream/:params', mediaLimiter, antiHotlinking, (req, res) => {
     const { params } = req.params;
+    console.log(`Media request for params: ${params.substring(0, 20)}... from ${req.ip} UA: ${req.get('User-Agent')?.substring(0, 50)}`);
 
     // Verify the obfuscated URL and get filename
     const filename = verifyObfuscatedUrl(params);
     if (!filename) {
+        console.log(`Invalid/expired URL verification failed for params: ${params.substring(0, 20)}...`);
         return res.status(403).json({ error: 'Invalid or expired media URL' });
     }
 
@@ -631,6 +678,7 @@ app.get('/stream/:params', mediaLimiter, antiHotlinking, (req, res) => {
     }
 
     // Stream the file with error handling
+    console.log(`Successfully serving file: ${filename} to ${req.ip}`);
     const fileStream = fs.createReadStream(filepath);
     fileStream.pipe(res);
 
@@ -639,6 +687,10 @@ app.get('/stream/:params', mediaLimiter, antiHotlinking, (req, res) => {
         if (!res.headersSent) {
             res.status(500).json({ error: 'Failed to stream file' });
         }
+    });
+
+    fileStream.on('end', () => {
+        console.log(`File streaming completed: ${filename}`);
     });
 });
 

@@ -18,7 +18,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Fetch Settings
     fetch('/api/settings')
-        .then(res => res.json())
+        .then(res => {
+            if (!res.ok) {
+                console.log('Settings fetch failed with status:', res.status);
+                return {};
+            }
+            return res.json();
+        })
         .then(settings => {
             if (settings.siteTitle) {
                 document.title = settings.siteTitle;
@@ -42,7 +48,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function loadPlaylist() {
         fetch('/api/playlist')
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(files => {
                 playlistEl.innerHTML = ''; // Clear loading
 
@@ -51,6 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
+                console.log('Loaded playlist with', files.length, 'files');
                 files.forEach((file, index) => {
                     const li = document.createElement('li');
                     li.innerHTML = `<span class="icon">🎵</span> ${escapeHtml(file.name)}`;
@@ -69,10 +81,17 @@ document.addEventListener('DOMContentLoaded', () => {
     function playDirectSong(filename) {
         // Verify the song exists and is not hidden
         fetch('/api/playlist')
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(files => {
+                console.log('Looking for song:', filename, 'in', files.length, 'files');
                 const targetFile = files.find(f => f.name === filename);
                 if (targetFile) {
+                    console.log('Found target file:', targetFile);
                     // Create a temporary list item for the active state
                     const tempLi = document.createElement('li');
                     playTrack(targetFile, tempLi);
@@ -89,6 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }, 100);
                 } else {
                     // Song not found or hidden, load normal playlist
+                    console.log('Song not found:', filename);
                     currentTitle.textContent = '指定的歌曲不存在或已隐藏';
                     loadPlaylist();
                 }
@@ -107,15 +127,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Update Player
         currentTitle.textContent = file.name;
+        console.log('Playing track:', file.name, 'URL:', file.url);
         audioPlayer.src = file.url;
 
         const playPromise = audioPlayer.play();
 
         if (playPromise !== undefined) {
             playPromise.catch(error => {
-                console.log('Auto-play prevented:', error);
-                // Show a "Click to Play" overlay if blocked
-                showPlayOverlay(() => audioPlayer.play());
+                console.error('Audio play error:', error);
+
+                // Try to reload the URL if it's expired
+                if (error.name === 'NotSupportedError' || error.message.includes('404')) {
+                    console.log('Attempting to get fresh URL for:', file.name);
+                    fetch('/api/playlist')
+                        .then(res => res.json())
+                        .then(files => {
+                            const freshFile = files.find(f => f.name === file.name);
+                            if (freshFile) {
+                                console.log('Got fresh URL:', freshFile.url);
+                                audioPlayer.src = freshFile.url;
+                                audioPlayer.play().catch(e => {
+                                    console.error('Retry failed:', e);
+                                    showPlayOverlay(() => audioPlayer.play());
+                                });
+                            }
+                        })
+                        .catch(err => {
+                            console.error('Failed to get fresh URL:', err);
+                            showPlayOverlay(() => audioPlayer.play());
+                        });
+                } else {
+                    // Show a "Click to Play" overlay if blocked
+                    showPlayOverlay(() => audioPlayer.play());
+                }
             });
         }
 

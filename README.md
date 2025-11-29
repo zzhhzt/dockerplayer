@@ -102,8 +102,17 @@
 
 ### ⚙️ 配置方式
 
+**自动内网访问** (无需配置):
+系统会自动允许以下内网IP访问：
+- `10.x.x.x` - 私有网络A类
+- `172.16-31.x.x` - 私有网络B类
+- `192.168.x.x` - 私有网络C类
+- `127.x.x.x` - 本地回环
+- `localhost` - 本地主机
+
 **环境变量配置** (.env文件):
 ```bash
+# 允许外网域名访问 (内网IP自动允许)
 ALLOWED_ORIGINS=https://yoursite.com,https://partner-site.com
 ```
 
@@ -124,3 +133,5 @@ ALLOWED_ORIGINS=https://yoursite.com,https://partner-site.com
 *   默认端口映射为 `8080`，可在 `docker-compose.yml` 中修改。
 *   建议在生产环境中使用HTTPS协议。
 *   定期更改管理员密码以确保安全。
+*   **内网访问**: `10.10.10.221` 等内网IP会自动被允许，无需额外配置。
+*   **外网访问**: 需要在后台设置或环境变量中配置允许的域名。

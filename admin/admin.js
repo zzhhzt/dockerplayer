@@ -19,9 +19,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const loginError = document.getElementById('loginError');
 
     const fileInput = document.getElementById('fileInput');
+    const uploadArea = document.getElementById('uploadArea');
     const uploadBtn = document.getElementById('uploadBtn');
+    const clearBtn = document.getElementById('clearBtn');
     const uploadStatus = document.getElementById('uploadStatus');
+    const uploadProgress = document.getElementById('uploadProgress');
     const fileList = document.getElementById('fileList');
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
 
     let adminPassword = localStorage.getItem('adminPassword');
 
@@ -132,6 +137,10 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(res => res.json())
             .then(files => {
                 fileList.innerHTML = '';
+                selectedFiles.clear();
+                isSelectAll = false;
+                updateBatchButtons();
+
                 files.forEach(file => {
                     const li = document.createElement('li');
                     const visibilityClass = file.hidden ? 'hidden' : 'visible';
@@ -140,7 +149,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     const escapedName = escapeHtml(file.name);
 
                     li.innerHTML = `
-                        <span class="file-name ${visibilityClass}">${escapedName} ${file.hidden ? '(👁️‍🗨️已隐藏)' : ''}</span>
+                        <div class="file-info">
+                            <input type="checkbox" class="checkbox" data-filename="${escapedName}">
+                            <span class="file-name ${visibilityClass}">${escapedName} ${file.hidden ? '(👁️‍🗨️已隐藏)' : ''}</span>
+                        </div>
                         <div class="actions">
                             <button class="qr-btn" onclick="showQrCode('${escapedName}')">二维码</button>
                             <button class="rename-btn" onclick="renameFile('${escapedName}')">重命名</button>
@@ -148,16 +160,127 @@ document.addEventListener('DOMContentLoaded', () => {
                             <button class="delete-btn" data-name="${escapedName}">删除</button>
                         </div>
                     `;
+
+                    // Add checkbox change listener
+                    const checkbox = li.querySelector('.checkbox');
+                    checkbox.addEventListener('change', (e) => {
+                        const filename = e.target.dataset.filename;
+                        if (e.target.checked) {
+                            selectedFiles.add(filename);
+                        } else {
+                            selectedFiles.delete(filename);
+                        }
+                        li.classList.toggle('selected');
+                        updateBatchButtons();
+                    });
+
                     fileList.appendChild(li);
                 });
 
                 // Add delete listeners
                 document.querySelectorAll('.delete-btn').forEach(btn => {
                     btn.addEventListener('click', (e) => {
-                        deleteFile(e.target.dataset.name);
+                        const filename = e.target.dataset.name;
+                        if (selectedFiles.has(filename)) {
+                            confirmAndDeleteSelected();
+                        } else {
+                            deleteFile(filename);
+                        }
                     });
                 });
             });
+    }
+
+    // Batch operations
+    selectAllBtn.addEventListener('click', () => {
+        const checkboxes = document.querySelectorAll('.file-list .checkbox');
+        const items = document.querySelectorAll('.file-list li');
+
+        isSelectAll = !isSelectAll;
+        selectedFiles.clear();
+
+        checkboxes.forEach((checkbox, index) => {
+            checkbox.checked = isSelectAll;
+            const filename = checkbox.dataset.filename;
+            if (isSelectAll) {
+                selectedFiles.add(filename);
+                items[index].classList.add('selected');
+            } else {
+                items[index].classList.remove('selected');
+            }
+        });
+
+        updateBatchButtons();
+        selectAllBtn.textContent = isSelectAll ? '取消全选' : '全选';
+    });
+
+    deleteSelectedBtn.addEventListener('click', () => {
+        if (selectedFiles.size === 0) return;
+        confirmAndDeleteSelected();
+    });
+
+    function updateBatchButtons() {
+        deleteSelectedBtn.disabled = selectedFiles.size === 0;
+        deleteSelectedBtn.textContent = `删除选中 (${selectedFiles.size})`;
+
+        // Update select all button text
+        const allFiles = document.querySelectorAll('.file-list .checkbox');
+        const checkedFiles = document.querySelectorAll('.file-list .checkbox:checked');
+
+        if (allFiles.length === checkedFiles.length && allFiles.length > 0) {
+            isSelectAll = true;
+            selectAllBtn.textContent = '取消全选';
+        } else {
+            isSelectAll = false;
+            selectAllBtn.textContent = '全选';
+        }
+    }
+
+    function confirmAndDeleteSelected() {
+        const count = selectedFiles.size;
+        if (!confirm(`确定要删除选中的 ${count} 个文件吗？此操作不可恢复。`)) return;
+
+        const filenames = Array.from(selectedFiles);
+        let deletedCount = 0;
+        let errors = [];
+
+        async function deleteNext() {
+            if (filenames.length === 0) {
+                // All done
+                if (deletedCount === count) {
+                    uploadStatus.textContent = `✅ 成功删除 ${deletedCount} 个文件`;
+                    uploadStatus.style.color = 'green';
+                } else {
+                    uploadStatus.textContent = `⚠️ 删除了 ${deletedCount}/${count} 个文件`;
+                    uploadStatus.style.color = '#f59e0b';
+                }
+                fetchFiles();
+                return;
+            }
+
+            const filename = filenames.shift();
+            try {
+                const res = await fetch(`/api/music/${encodeURIComponent(filename)}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'x-admin-password': adminPassword
+                    }
+                });
+
+                if (res.ok) {
+                    deletedCount++;
+                    deleteNext();
+                } else {
+                    errors.push(filename);
+                    deleteNext();
+                }
+            } catch (err) {
+                errors.push(filename);
+                deleteNext();
+            }
+        }
+
+        deleteNext();
     }
 
     window.toggleVisibility = function (filename, hidden) {
@@ -201,48 +324,137 @@ document.addEventListener('DOMContentLoaded', () => {
             });
     };
 
+    let selectedFiles = new Set();
+    let isSelectAll = false;
+
+    // --- Upload Area Events ---
+    uploadArea.addEventListener('click', () => {
+        fileInput.click();
+    });
+
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length > 0) {
+            fileInput.files = e.dataTransfer.files;
+            updateUploadUI(files);
+        }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        const files = Array.from(e.target.files);
+        updateUploadUI(files);
+    });
+
+    function updateUploadUI(files) {
+        if (files.length === 0) {
+            clearBtn.style.display = 'none';
+            uploadBtn.disabled = true;
+            uploadStatus.textContent = '';
+        } else {
+            clearBtn.style.display = 'block';
+            uploadBtn.disabled = false;
+            uploadStatus.textContent = `已选择 ${files.length} 个文件`;
+            uploadStatus.className = '';
+        }
+    }
+
+    clearBtn.addEventListener('click', () => {
+        fileInput.value = '';
+        fileInput.files = null;
+        clearBtn.style.display = 'none';
+        uploadBtn.disabled = true;
+        uploadStatus.textContent = '';
+        uploadProgress.style.display = 'none';
+    });
+
     uploadBtn.addEventListener('click', () => {
-        const file = fileInput.files[0];
-        if (!file) {
+        const files = fileInput.files;
+        if (!files || files.length === 0) {
             uploadStatus.textContent = '请先选择文件';
             uploadStatus.className = 'error';
             return;
         }
 
-        const formData = new FormData();
-        formData.append('file', file);
+        uploadFiles(files);
+    });
+
+    async function uploadFiles(files) {
+        const totalFiles = files.length;
+        let uploadedCount = 0;
+        let errors = [];
 
         uploadBtn.disabled = true;
-        uploadStatus.textContent = '正在上传...';
+        clearBtn.disabled = true;
+        uploadStatus.textContent = `正在上传 0/${totalFiles}...`;
         uploadStatus.className = '';
+        uploadProgress.style.display = 'block';
 
-        fetch('/api/upload', {
-            method: 'POST',
-            headers: {
-                'x-admin-password': adminPassword
-            },
-            body: formData
-        })
-            .then(async res => {
-                if (res.ok) return res.json();
-                const errorData = await res.json().catch(() => ({}));
-                throw new Error(errorData.error || `Upload failed with status ${res.status}`);
-            })
-            .then(data => {
-                uploadStatus.textContent = '上传成功!';
-                uploadStatus.style.color = 'green';
-                fileInput.value = '';
-                fetchFiles();
-            })
-            .catch(err => {
-                console.error(err);
-                uploadStatus.textContent = `上传失败: ${err.message}`;
-                uploadStatus.className = 'error';
-            })
-            .finally(() => {
-                uploadBtn.disabled = false;
-            });
-    });
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch('/api/upload', {
+                    method: 'POST',
+                    headers: {
+                        'x-admin-password': adminPassword
+                    },
+                    body: formData
+                });
+
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({}));
+                    throw new Error(errorData.error || `Upload failed with status ${res.status}`);
+                }
+
+                uploadedCount++;
+                updateProgress(uploadedCount, totalFiles);
+            } catch (err) {
+                console.error(`Error uploading ${file.name}:`, err);
+                errors.push(`${file.name}: ${err.message}`);
+            }
+        }
+
+        // Final result
+        uploadProgress.style.display = 'none';
+        if (uploadedCount === totalFiles) {
+            uploadStatus.textContent = `✅ 全部 ${totalFiles} 个文件上传成功!`;
+            uploadStatus.style.color = 'green';
+            fetchFiles();
+        } else {
+            uploadStatus.textContent = `⚠️ ${uploadedCount}/${totalFiles} 个文件上传成功`;
+            if (errors.length > 0) {
+                uploadStatus.textContent += ` (${errors.length} 个失败)`;
+                uploadStatus.style.color = '#f59e0b';
+            }
+        }
+
+        fileInput.value = '';
+        fileInput.files = null;
+        clearBtn.style.display = 'none';
+        uploadBtn.disabled = false;
+        clearBtn.disabled = false;
+    }
+
+    function updateProgress(current, total) {
+        const percentage = Math.round((current / total) * 100);
+        document.querySelector('.progress-fill').style.width = `${percentage}%`;
+        document.querySelector('.progress-text').textContent = `${current}/${total} (${percentage}%)`;
+        uploadStatus.textContent = `正在上传 ${current}/${total}...`;
+    }
 
     function deleteFile(filename) {
         if (!confirm(`确定要删除 ${filename} 吗?`)) return;
