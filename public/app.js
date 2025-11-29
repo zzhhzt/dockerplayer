@@ -1,3 +1,15 @@
+// HTML escaping function to prevent XSS
+function escapeHtml(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return String(text).replace(/[&<>"']/g, m => map[m]);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const playlistEl = document.getElementById('playlist');
     const audioPlayer = document.getElementById('audioPlayer');
@@ -41,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 files.forEach((file, index) => {
                     const li = document.createElement('li');
-                    li.innerHTML = `<span class="icon">🎵</span> ${file.name}`;
+                    li.innerHTML = `<span class="icon">🎵</span> ${escapeHtml(file.name)}`;
                     li.addEventListener('click', () => {
                         playTrack(file, li);
                     });

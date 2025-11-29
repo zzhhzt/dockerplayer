@@ -1,3 +1,15 @@
+// HTML escaping function to prevent XSS
+function escapeHtml(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return String(text).replace(/[&<>"']/g, m => map[m]);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const loginModal = document.getElementById('loginModal');
     const dashboard = document.getElementById('dashboard');
@@ -106,14 +118,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     const visibilityClass = file.hidden ? 'hidden' : 'visible';
                     const visibilityText = file.hidden ? '显示' : '隐藏';
                     const visibilityBtnClass = file.hidden ? 'show-btn' : 'hide-btn';
+                    const escapedName = escapeHtml(file.name);
 
                     li.innerHTML = `
-                        <span class="file-name ${visibilityClass}">${file.name} ${file.hidden ? '(👁️‍🗨️已隐藏)' : ''}</span>
+                        <span class="file-name ${visibilityClass}">${escapedName} ${file.hidden ? '(👁️‍🗨️已隐藏)' : ''}</span>
                         <div class="actions">
-                            <button class="qr-btn" onclick="showQrCode('${file.name}')">二维码</button>
-                            <button class="rename-btn" onclick="renameFile('${file.name}')">重命名</button>
-                            <button class="${visibilityBtnClass}" onclick="toggleVisibility('${file.name}', ${!file.hidden})">${visibilityText}</button>
-                            <button class="delete-btn" data-name="${file.name}">删除</button>
+                            <button class="qr-btn" onclick="showQrCode('${escapedName}')">二维码</button>
+                            <button class="rename-btn" onclick="renameFile('${escapedName}')">重命名</button>
+                            <button class="${visibilityBtnClass}" onclick="toggleVisibility('${escapedName}', ${!file.hidden})">${visibilityText}</button>
+                            <button class="delete-btn" data-name="${escapedName}">删除</button>
                         </div>
                     `;
                     fileList.appendChild(li);
