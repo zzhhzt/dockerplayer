@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>扫码听歌 | Scan to Listen</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎵 扫码听歌</h1>
+            <p>Select a track to play</p>
+        </header>
+
+        <div class="player-card">
+            <div class="now-playing">
+                <div class="album-art" id="albumArt">
+                    <span>🎶</span>
+                </div>
+                <h2 id="currentTitle">选择一首歌曲播放</h2>
+                <audio id="audioPlayer" controls></audio>
+            </div>
+        </div>
+
+        <div class="playlist-container">
+            <h3>播放列表</h3>
+            <ul id="playlist" class="playlist">
+                <!-- Playlist items will be injected here -->
+                <li class="loading">正在加载歌曲...</li>
+            </ul>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

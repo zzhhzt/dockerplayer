@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: scan-to-listen-app
+    restart: always
+    ports:
+      - "8080:3000"
+    volumes:
+      - ./music:/app/music
+    environment:
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - PORT=3000
