@@ -177,6 +177,11 @@ document.addEventListener('DOMContentLoaded', () => {
             titleTop: 30
         };
 
+        if (typeof QRCode === 'undefined') {
+            alert('QR Code library failed to load. Please check your internet connection or try refreshing.');
+            return;
+        }
+
         new QRCode(qrcodeContainer, options);
     }
 
