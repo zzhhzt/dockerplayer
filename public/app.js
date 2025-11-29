@@ -212,14 +212,18 @@ document.addEventListener('DOMContentLoaded', () => {
             overlay.style.cssText = `
                 position: fixed; top: 0; left: 0; width: 100%; height: 100%;
                 background: rgba(0,0,0,0.7); z-index: 9999;
-                display: flex; justify-content: center; align-items: center;
+                display: flex; flex-direction: column; justify-content: center; align-items: center;
                 cursor: pointer;
             `;
-            overlay.innerHTML = '<div style="font-size: 80px; color: white;">▶️</div>';
+            overlay.innerHTML = `
+                <div style="font-size: 60px; color: white; margin-bottom: 10px;">▶️</div>
+                <div style="color: white; font-size: 16px;">点击播放</div>
+            `;
             document.body.appendChild(overlay);
 
             overlay.addEventListener('click', () => {
                 overlay.style.display = 'none';
+                console.log('Play overlay clicked, attempting to play...');
                 callback();
             });
         } else {

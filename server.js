@@ -648,7 +648,7 @@ app.get('/api/admin/playlist', checkAuth, (req, res) => {
 });
 
 // 8. Get Media File via Obfuscated URL
-app.get('/api/stream/:params', mediaLimiter, antiHotlinking, (req, res) => {
+app.get('/api/stream/:params', mediaLimiter, (req, res) => {
     const { params } = req.params;
     console.log(`Media request for params: ${params.substring(0, 20)}... from ${req.ip} UA: ${req.get('User-Agent')?.substring(0, 50)}`);
 
@@ -658,6 +658,8 @@ app.get('/api/stream/:params', mediaLimiter, antiHotlinking, (req, res) => {
         console.log(`Invalid/expired URL verification failed for params: ${params.substring(0, 20)}...`);
         return res.status(403).json({ error: 'Invalid or expired media URL' });
     }
+
+    console.log(`Successfully verified URL for file: ${filename}`);
 
     // Validate filename
     if (!validateFilename(filename)) {
@@ -675,12 +677,22 @@ app.get('/api/stream/:params', mediaLimiter, antiHotlinking, (req, res) => {
         return res.status(404).json({ error: 'File not found' });
     }
 
-    // Set enhanced security headers
+    // Set mobile-friendly CORS headers
+    const userAgent = req.headers['user-agent'] || '';
+    const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(userAgent);
+
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, private');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Access-Control-Allow-Credentials', 'false');
+
+    // More permissive CORS for mobile devices
+    if (isMobile) {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', '*');
+        console.log(`Mobile CORS headers set for: ${userAgent.substring(0, 50)}`);
+    }
 
     // Set content type
     const ext = path.extname(filename).toLowerCase();
