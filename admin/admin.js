@@ -57,7 +57,38 @@ document.addEventListener('DOMContentLoaded', () => {
         loginModal.style.display = 'none';
         dashboard.style.display = 'block';
         fetchFiles();
+        loadSettings();
     }
+
+    // --- Settings Logic ---
+    const siteTitleInput = document.getElementById('siteTitleInput');
+    const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+
+    function loadSettings() {
+        fetch('/api/settings')
+            .then(res => res.json())
+            .then(data => {
+                if (data.siteTitle) {
+                    siteTitleInput.value = data.siteTitle;
+                }
+            });
+    }
+
+    saveSettingsBtn.addEventListener('click', () => {
+        const title = siteTitleInput.value;
+        fetch('/api/settings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-password': adminPassword
+            },
+            body: JSON.stringify({ siteTitle: title })
+        })
+            .then(res => {
+                if (res.ok) alert('设置已保存');
+                else alert('保存失败');
+            });
+    });
 
     // --- File Management ---
 
@@ -72,6 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span>${file.name}</span>
                         <div class="actions">
                             <button class="qr-btn" onclick="showQrCode('${file.name}')">二维码</button>
+                            <button class="rename-btn" onclick="renameFile('${file.name}')">重命名</button>
                             <button class="delete-btn" data-name="${file.name}">删除</button>
                         </div>
                     `;
@@ -86,6 +118,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             });
     }
+
+    window.renameFile = function (oldName) {
+        const newName = prompt('请输入新文件名 (包含后缀):', oldName);
+        if (!newName || newName === oldName) return;
+
+        fetch(`/api/music/${encodeURIComponent(oldName)}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-password': adminPassword
+            },
+            body: JSON.stringify({ newName: newName })
+        })
+            .then(async res => {
+                if (res.ok) {
+                    fetchFiles();
+                } else {
+                    const data = await res.json();
+                    alert('重命名失败: ' + (data.error || '未知错误'));
+                }
+            });
+    };
 
     uploadBtn.addEventListener('click', () => {
         const file = fileInput.files[0];

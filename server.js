@@ -100,6 +100,74 @@ app.delete('/api/music/:filename', checkAuth, (req, res) => {
     }
 });
 
+// --- New Features ---
+
+const DATA_DIR = path.join(__dirname, 'data');
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+
+if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR);
+}
+
+function getSettings() {
+    if (!fs.existsSync(SETTINGS_FILE)) {
+        return { siteTitle: 'Scan to Listen' };
+    }
+    try {
+        return JSON.parse(fs.readFileSync(SETTINGS_FILE));
+    } catch (e) {
+        return { siteTitle: 'Scan to Listen' };
+    }
+}
+
+function saveSettings(settings) {
+    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+}
+
+// 4. Rename File (Protected)
+app.put('/api/music/:filename', checkAuth, (req, res) => {
+    const oldName = req.params.filename;
+    const newName = req.body.newName;
+
+    if (!newName) return res.status(400).json({ error: 'New name required' });
+
+    // Sanitize new name (basic)
+    const safeNewName = path.basename(newName);
+
+    // Ensure extension remains or is valid if user provided one? 
+    // For simplicity, we assume user provides full name. 
+    // But safer to keep original extension if user didn't provide one?
+    // Let's just trust the user input for now but ensure it's a filename.
+
+    const oldPath = path.join(MUSIC_DIR, oldName);
+    const newPath = path.join(MUSIC_DIR, safeNewName);
+
+    // Security check
+    if (!oldPath.startsWith(MUSIC_DIR) || !newPath.startsWith(MUSIC_DIR)) {
+        return res.status(403).json({ error: 'Invalid path' });
+    }
+
+    if (!fs.existsSync(oldPath)) return res.status(404).json({ error: 'File not found' });
+    if (fs.existsSync(newPath)) return res.status(400).json({ error: 'File already exists' });
+
+    fs.rename(oldPath, newPath, (err) => {
+        if (err) return res.status(500).json({ error: 'Rename failed' });
+        res.json({ message: 'Renamed successfully', newName: safeNewName });
+    });
+});
+
+// 5. Get Settings (Public)
+app.get('/api/settings', (req, res) => {
+    res.json(getSettings());
+});
+
+// 6. Update Settings (Protected)
+app.post('/api/settings', checkAuth, (req, res) => {
+    const settings = req.body;
+    saveSettings(settings);
+    res.json({ message: 'Settings saved' });
+});
+
 // Start Server
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
