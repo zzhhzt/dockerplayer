@@ -88,9 +88,10 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             body: formData
         })
-            .then(res => {
+            .then(async res => {
                 if (res.ok) return res.json();
-                throw new Error('Upload failed');
+                const errorData = await res.json().catch(() => ({}));
+                throw new Error(errorData.error || `Upload failed with status ${res.status}`);
             })
             .then(data => {
                 uploadStatus.textContent = '上传成功!';
@@ -99,7 +100,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 fetchFiles();
             })
             .catch(err => {
-                uploadStatus.textContent = '上传失败: 密码错误或服务器问题';
+                console.error(err);
+                uploadStatus.textContent = `上传失败: ${err.message}`;
                 uploadStatus.className = 'error';
             })
             .finally(() => {

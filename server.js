@@ -17,27 +17,6 @@ if (!fs.existsSync(MUSIC_DIR)) {
 
 // Middleware
 app.use(cors());
-app.use(express.json());
-app.use(express.static('public')); // Serve public player
-app.use('/admin', express.static('admin')); // Serve admin panel
-app.use('/music', express.static(MUSIC_DIR)); // Serve music files
-
-// Multer setup for file uploads
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, MUSIC_DIR);
-    },
-    filename: (req, file, cb) => {
-        // Keep original filename, handle duplicates if necessary (simple overwrite here)
-        // Decode URI component to handle non-ASCII characters correctly if needed, 
-        // but multer usually handles this. We use Buffer to fix encoding issues if any.
-        file.originalname = Buffer.from(file.originalname, 'latin1').toString('utf8');
-        cb(null, file.originalname);
-    }
-});
-const upload = multer({ storage: storage });
-
-// Auth Middleware
 const checkAuth = (req, res, next) => {
     const password = req.headers['x-admin-password'] || req.query.password;
     if (password === ADMIN_PASSWORD) {
@@ -55,7 +34,7 @@ app.get('/api/playlist', (req, res) => {
         if (err) {
             return res.status(500).json({ error: 'Failed to scan directory' });
         }
-        
+
         const musicFiles = files.filter(file => {
             const ext = path.extname(file).toLowerCase();
             return ['.mp3', '.wav', '.ogg', '.m4a'].includes(ext);
@@ -83,7 +62,7 @@ app.delete('/api/music/:filename', checkAuth, (req, res) => {
 
     // Security check: prevent directory traversal
     if (!filepath.startsWith(MUSIC_DIR)) {
-         return res.status(403).json({ error: 'Invalid filename' });
+        return res.status(403).json({ error: 'Invalid filename' });
     }
 
     if (fs.existsSync(filepath)) {
