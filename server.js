@@ -45,7 +45,7 @@ setInterval(() => {
 }, CLEANUP_INTERVAL);
 
 // Generate obfuscated signed URL for media access
-function generateSignedUrl(filename, req = null, duration = 300000) { // 5 minutes for better compatibility
+function generateSignedUrl(filename, req = null, duration = 1800000) { // 30 minutes for mobile compatibility
     const timestamp = Date.now();
     const random = crypto.randomBytes(16).toString('hex');
     const expiry = timestamp + duration;
@@ -83,16 +83,32 @@ function verifyObfuscatedUrl(params) {
         const [random, signature, expiryStr] = decoded.split(':');
 
         if (!random || !signature || !expiryStr) {
+            console.log('Invalid URL format: missing components');
             return false;
         }
 
         const expiry = parseInt(expiryStr);
-        if (isNaN(expiry) || Date.now() > expiry) {
+        const currentTime = Date.now();
+        const timeToExpiry = expiry - currentTime;
+
+        if (isNaN(expiry)) {
+            console.log('Invalid expiry timestamp');
+            return false;
+        }
+
+        if (currentTime > expiry) {
+            console.log(`URL expired: expired ${Math.abs(timeToExpiry)}ms ago`);
             return false;
         }
 
         const data = signedUrls.get(random);
-        if (!data || data.expiry !== expiry) {
+        if (!data) {
+            console.log('URL not found in signedUrls store');
+            return false;
+        }
+
+        if (data.expiry !== expiry) {
+            console.log('URL expiry mismatch');
             return false;
         }
 
@@ -102,13 +118,21 @@ function verifyObfuscatedUrl(params) {
             .digest('hex');
 
         if (signature !== expectedSignature) {
+            console.log('Invalid signature');
             signedUrls.delete(random);
             return false;
         }
 
-        // Return the filename and clean up
+        console.log(`URL verified successfully for ${data.filename}, expires in ${Math.floor(timeToExpiry/1000)}s`);
+
+        // Return the filename but keep URL for potential reuse (mobile browsers may request multiple times)
         const filename = data.filename;
-        signedUrls.delete(random);
+
+        // Only delete if it's close to expiry (within 1 minute) to prevent memory buildup
+        if (expiry - Date.now() < 60000) {
+            signedUrls.delete(random);
+        }
+
         return filename;
 
     } catch (error) {
