@@ -21,11 +21,50 @@
         </div>
     </div>
 
+    <!-- Dashboard -->
+    <div id="dashboard" class="dashboard" style="display: none;">
+        <div class="dashboard-header">
+            <h1>🎵 音乐管理后台</h1>
+            <button id="logoutBtn" class="logout-btn">退出登录</button>
+        </div>
+
+        <div class="dashboard-content">
+            <!-- 文件上传区域 -->
+            <div class="card">
+                <h3>📤 上传音乐</h3>
+                <div class="upload-section">
+                    <input type="file" id="fileInput" accept=".mp3,.wav,.ogg,.m4a">
+                    <button id="uploadBtn">上传</button>
+                </div>
+                <p id="uploadStatus"></p>
+            </div>
+
+            <!-- 设置区域 -->
+            <div class="card">
+                <h3>⚙️ 网站设置</h3>
+                <div class="settings-section">
+                    <label>网站标题:</label>
+                    <input type="text" id="siteTitleInput" placeholder="输入网站标题">
+                    <button id="saveSettingsBtn">保存设置</button>
+                </div>
+            </div>
+
+            <!-- 文件列表区域 -->
+            <div class="card list-card">
+                <h3>📂 现有歌曲列表</h3>
+                <ul id="fileList" class="file-list">
+                    <!-- Files will be listed here -->
+                </ul>
+            </div>
+        </div>
+    </div>
+
     <!-- QR Code Modal -->
     <div id="qrModal" class="modal" style="display: none;">
         <div class="modal-content qr-modal-content">
             <span class="close-btn" id="closeQrModal">&times;</span>
             <h2>📱 扫码听歌</h2>
+            <p id="qrSongName" class="song-name"></p>
 
             <div class="qr-controls">
                 <div class="control-group">

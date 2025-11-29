@@ -217,3 +217,105 @@ button:hover {
     font-size: 0.8rem;
     margin: 0;
 }
+
+/* Dashboard Styles */
+.dashboard {
+    width: 100%;
+    min-height: 100vh;
+    background-color: var(--bg-color);
+}
+
+.dashboard-header {
+    background: var(--card-bg);
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.dashboard-header h1 {
+    color: var(--primary-color);
+    margin: 0;
+}
+
+.logout-btn {
+    background-color: var(--danger-color);
+    padding: 8px 16px;
+}
+
+.logout-btn:hover {
+    opacity: 0.9;
+}
+
+.dashboard-content {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.upload-section,
+.settings-section {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.upload-section input[type="file"] {
+    flex: 1;
+    min-width: 200px;
+}
+
+.settings-section {
+    align-items: center;
+}
+
+.settings-section label {
+    margin-right: 10px;
+    margin-bottom: 0;
+}
+
+.settings-section input[type="text"] {
+    flex: 1;
+    min-width: 200px;
+    margin: 0;
+}
+
+/* QR Song Name */
+.song-name {
+    font-weight: 600;
+    color: var(--primary-color);
+    margin: 10px 0;
+    font-size: 1.1rem;
+}
+
+/* File visibility styles */
+.file-name.hidden {
+    color: #9ca3af;
+    font-style: italic;
+}
+
+.file-name.visible {
+    color: var(--text-main);
+}
+
+.hide-btn {
+    background-color: #6b7280;
+    padding: 5px 10px;
+    font-size: 0.8rem;
+}
+
+.hide-btn:hover {
+    background-color: #4b5563;
+}
+
+.show-btn {
+    background-color: var(--primary-color);
+    padding: 5px 10px;
+    font-size: 0.8rem;
+}
+
+.show-btn:hover {
+    opacity: 0.9;
+}

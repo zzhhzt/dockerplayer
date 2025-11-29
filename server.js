@@ -58,9 +58,13 @@ app.get('/api/playlist', (req, res) => {
             return res.status(500).json({ error: 'Failed to scan directory' });
         }
 
+        // Get hidden files from settings
+        const settings = getSettings();
+        const hiddenFiles = settings.hiddenFiles || [];
+
         const musicFiles = files.filter(file => {
             const ext = path.extname(file).toLowerCase();
-            return ['.mp3', '.wav', '.ogg', '.m4a'].includes(ext);
+            return ['.mp3', '.wav', '.ogg', '.m4a'].includes(ext) && !hiddenFiles.includes(file);
         }).map(file => ({
             name: file,
             url: `/music/${encodeURIComponent(file)}`
@@ -166,6 +170,63 @@ app.post('/api/settings', checkAuth, (req, res) => {
     const settings = req.body;
     saveSettings(settings);
     res.json({ message: 'Settings saved' });
+});
+
+// 7. Get Admin Playlist (Protected) - Shows all files including hidden ones
+app.get('/api/admin/playlist', checkAuth, (req, res) => {
+    fs.readdir(MUSIC_DIR, (err, files) => {
+        if (err) {
+            return res.status(500).json({ error: 'Failed to scan directory' });
+        }
+
+        // Get hidden files from settings
+        const settings = getSettings();
+        const hiddenFiles = settings.hiddenFiles || [];
+
+        const musicFiles = files.filter(file => {
+            const ext = path.extname(file).toLowerCase();
+            return ['.mp3', '.wav', '.ogg', '.m4a'].includes(ext);
+        }).map(file => ({
+            name: file,
+            url: `/music/${encodeURIComponent(file)}`,
+            hidden: hiddenFiles.includes(file)
+        }));
+
+        res.json(musicFiles);
+    });
+});
+
+// 8. Toggle File Visibility (Protected)
+app.put('/api/music/:filename/visibility', checkAuth, (req, res) => {
+    const filename = req.params.filename;
+    const { hidden } = req.body;
+
+    const filepath = path.join(MUSIC_DIR, filename);
+
+    // Security check: prevent directory traversal
+    if (!filepath.startsWith(MUSIC_DIR)) {
+        return res.status(403).json({ error: 'Invalid filename' });
+    }
+
+    if (!fs.existsSync(filepath)) {
+        return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Get current settings
+    const settings = getSettings();
+    if (!settings.hiddenFiles) {
+        settings.hiddenFiles = [];
+    }
+
+    const index = settings.hiddenFiles.indexOf(filename);
+    if (hidden && index === -1) {
+        settings.hiddenFiles.push(filename);
+    } else if (!hidden && index > -1) {
+        settings.hiddenFiles.splice(index, 1);
+    }
+
+    saveSettings(settings);
+    res.json({ message: 'File visibility updated', hidden });
 });
 
 // Start Server

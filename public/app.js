@@ -16,45 +16,77 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(err => console.log('Settings fetch error:', err));
 
-    // Fetch Playlist
-    fetch('/api/playlist')
-        .then(response => response.json())
-        .then(files => {
-            playlistEl.innerHTML = ''; // Clear loading
+    // Check for direct QR code play first
+    const urlParams = new URLSearchParams(window.location.search);
+    const songToPlay = urlParams.get('song');
 
-            if (files.length === 0) {
-                playlistEl.innerHTML = '<li class="loading">暂无歌曲，请联系管理员上传。</li>';
-                return;
-            }
+    if (songToPlay) {
+        // Try to play the specific song directly
+        playDirectSong(songToPlay);
+    } else {
+        // Load playlist for normal browsing
+        loadPlaylist();
+    }
 
-            files.forEach((file, index) => {
-                const li = document.createElement('li');
-                li.innerHTML = `<span class="icon">🎵</span> ${file.name}`;
-                li.addEventListener('click', () => {
-                    playTrack(file, li);
-                });
-                playlistEl.appendChild(li);
-            });
+    function loadPlaylist() {
+        fetch('/api/playlist')
+            .then(response => response.json())
+            .then(files => {
+                playlistEl.innerHTML = ''; // Clear loading
 
-            // Check for Auto-play
-            const urlParams = new URLSearchParams(window.location.search);
-            const songToPlay = urlParams.get('song');
-
-            if (songToPlay) {
-                const targetFile = files.find(f => f.name === songToPlay);
-                if (targetFile) {
-                    // Find the corresponding list item
-                    const targetLi = Array.from(playlistEl.children).find(li => li.textContent.includes(songToPlay));
-                    if (targetLi) {
-                        playTrack(targetFile, targetLi);
-                    }
+                if (files.length === 0) {
+                    playlistEl.innerHTML = '<li class="loading">暂无歌曲，请联系管理员上传。</li>';
+                    return;
                 }
-            }
-        })
-        .catch(err => {
-            console.error('Error fetching playlist:', err);
-            playlistEl.innerHTML = '<li class="loading">加载失败，请刷新重试。</li>';
-        });
+
+                files.forEach((file, index) => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<span class="icon">🎵</span> ${file.name}`;
+                    li.addEventListener('click', () => {
+                        playTrack(file, li);
+                    });
+                    playlistEl.appendChild(li);
+                });
+            })
+            .catch(err => {
+                console.error('Error fetching playlist:', err);
+                playlistEl.innerHTML = '<li class="loading">加载失败，请刷新重试。</li>';
+            });
+    }
+
+    function playDirectSong(filename) {
+        // Verify the song exists and is not hidden
+        fetch('/api/playlist')
+            .then(response => response.json())
+            .then(files => {
+                const targetFile = files.find(f => f.name === filename);
+                if (targetFile) {
+                    // Create a temporary list item for the active state
+                    const tempLi = document.createElement('li');
+                    playTrack(targetFile, tempLi);
+
+                    // Show playlist in background
+                    loadPlaylist();
+
+                    // Find and highlight the actual list item when playlist loads
+                    setTimeout(() => {
+                        const actualLi = Array.from(playlistEl.children).find(li => li.textContent.includes(filename));
+                        if (actualLi) {
+                            actualLi.classList.add('active');
+                        }
+                    }, 100);
+                } else {
+                    // Song not found or hidden, load normal playlist
+                    currentTitle.textContent = '指定的歌曲不存在或已隐藏';
+                    loadPlaylist();
+                }
+            })
+            .catch(err => {
+                console.error('Error verifying song:', err);
+                currentTitle.textContent = '加载歌曲失败';
+                loadPlaylist();
+            });
+    }
 
     function playTrack(file, liElement) {
         // Update Active State

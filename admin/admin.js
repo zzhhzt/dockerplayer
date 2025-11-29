@@ -93,17 +93,26 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- File Management ---
 
     function fetchFiles() {
-        fetch('/api/playlist')
+        fetch('/api/admin/playlist', {
+            headers: {
+                'x-admin-password': adminPassword
+            }
+        })
             .then(res => res.json())
             .then(files => {
                 fileList.innerHTML = '';
                 files.forEach(file => {
                     const li = document.createElement('li');
+                    const visibilityClass = file.hidden ? 'hidden' : 'visible';
+                    const visibilityText = file.hidden ? '显示' : '隐藏';
+                    const visibilityBtnClass = file.hidden ? 'show-btn' : 'hide-btn';
+
                     li.innerHTML = `
-                        <span>${file.name}</span>
+                        <span class="file-name ${visibilityClass}">${file.name} ${file.hidden ? '(👁️‍🗨️已隐藏)' : ''}</span>
                         <div class="actions">
                             <button class="qr-btn" onclick="showQrCode('${file.name}')">二维码</button>
                             <button class="rename-btn" onclick="renameFile('${file.name}')">重命名</button>
+                            <button class="${visibilityBtnClass}" onclick="toggleVisibility('${file.name}', ${!file.hidden})">${visibilityText}</button>
                             <button class="delete-btn" data-name="${file.name}">删除</button>
                         </div>
                     `;
@@ -118,6 +127,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             });
     }
+
+    window.toggleVisibility = function (filename, hidden) {
+        fetch(`/api/music/${encodeURIComponent(filename)}/visibility`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-admin-password': adminPassword
+            },
+            body: JSON.stringify({ hidden: hidden })
+        })
+            .then(async res => {
+                if (res.ok) {
+                    fetchFiles();
+                } else {
+                    const data = await res.json();
+                    alert('切换可见性失败: ' + (data.error || '未知错误'));
+                }
+            });
+    };
 
     window.renameFile = function (oldName) {
         const newName = prompt('请输入新文件名 (包含后缀):', oldName);
