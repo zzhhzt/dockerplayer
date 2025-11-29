@@ -20,11 +20,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     loginBtn.addEventListener('click', () => {
         const pwd = passwordInput.value;
-        if (pwd) {
-            adminPassword = pwd;
-            localStorage.setItem('adminPassword', pwd);
-            verifyAndShowDashboard();
-        }
+        if (!pwd) return;
+
+        loginBtn.disabled = true;
+        loginBtn.textContent = '验证中...';
+        loginError.textContent = '';
+
+        fetch('/api/verify', {
+            method: 'POST',
+            headers: { 'x-admin-password': pwd }
+        })
+            .then(res => {
+                if (res.ok) {
+                    adminPassword = pwd;
+                    localStorage.setItem('adminPassword', pwd);
+                    verifyAndShowDashboard();
+                } else {
+                    loginError.textContent = '密码错误';
+                }
+            })
+            .catch(() => {
+                loginError.textContent = '连接服务器失败';
+            })
+            .finally(() => {
+                loginBtn.disabled = false;
+                loginBtn.textContent = '登录';
+            });
     });
 
     logoutBtn.addEventListener('click', () => {

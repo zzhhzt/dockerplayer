@@ -44,6 +44,11 @@ const checkAuth = (req, res, next) => {
     }
 };
 
+// Verify Auth Endpoint
+app.post('/api/verify', checkAuth, (req, res) => {
+    res.json({ success: true });
+});
+
 // --- API Routes ---
 
 // 1. Get Playlist (Public)
