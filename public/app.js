@@ -79,6 +79,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function playDirectSong(filename) {
+        // Show loading message
+        currentTitle.textContent = '正在加载歌曲...';
+
         // Verify the song exists and is not hidden
         fetch('/api/playlist')
             .then(response => {
@@ -92,12 +95,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 const targetFile = files.find(f => f.name === filename);
                 if (targetFile) {
                     console.log('Found target file:', targetFile);
-                    // Create a temporary list item for the active state
-                    const tempLi = document.createElement('li');
-                    playTrack(targetFile, tempLi);
-
-                    // Show playlist in background
-                    loadPlaylist();
+                    // For mobile, show play overlay immediately to ensure user interaction
+                    if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+                        showPlayOverlay(() => {
+                            playTrack(targetFile, null);
+                            loadPlaylist();
+                        });
+                    } else {
+                        // Create a temporary list item for the active state
+                        const tempLi = document.createElement('li');
+                        playTrack(targetFile, tempLi);
+                        loadPlaylist();
+                    }
 
                     // Find and highlight the actual list item when playlist loads
                     setTimeout(() => {
@@ -105,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (actualLi) {
                             actualLi.classList.add('active');
                         }
-                    }, 100);
+                    }, 500);
                 } else {
                     // Song not found or hidden, load normal playlist
                     console.log('Song not found:', filename);
@@ -128,39 +137,32 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update Player
         currentTitle.textContent = file.name;
         console.log('Playing track:', file.name, 'URL:', file.url);
+
+        // Set audio source
         audioPlayer.src = file.url;
 
-        const playPromise = audioPlayer.play();
+        // For mobile browsers, we need user interaction to play audio
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-        if (playPromise !== undefined) {
-            playPromise.catch(error => {
-                console.error('Audio play error:', error);
-
-                // Try to reload the URL if it's expired
-                if (error.name === 'NotSupportedError' || error.message.includes('404')) {
-                    console.log('Attempting to get fresh URL for:', file.name);
-                    fetch('/api/playlist')
-                        .then(res => res.json())
-                        .then(files => {
-                            const freshFile = files.find(f => f.name === file.name);
-                            if (freshFile) {
-                                console.log('Got fresh URL:', freshFile.url);
-                                audioPlayer.src = freshFile.url;
-                                audioPlayer.play().catch(e => {
-                                    console.error('Retry failed:', e);
-                                    showPlayOverlay(() => audioPlayer.play());
-                                });
-                            }
-                        })
-                        .catch(err => {
-                            console.error('Failed to get fresh URL:', err);
-                            showPlayOverlay(() => audioPlayer.play());
-                        });
-                } else {
-                    // Show a "Click to Play" overlay if blocked
-                    showPlayOverlay(() => audioPlayer.play());
-                }
-            });
+        if (isMobile) {
+            // For mobile, always show play overlay to ensure user interaction
+            setTimeout(() => {
+                showPlayOverlay(() => {
+                    audioPlayer.play().catch(error => {
+                        console.error('Mobile audio play error:', error);
+                        handlePlayError(error, file);
+                    });
+                });
+            }, 100);
+        } else {
+            // For desktop, try to play directly
+            const playPromise = audioPlayer.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.error('Desktop audio play error:', error);
+                    handlePlayError(error, file);
+                });
+            }
         }
 
         // Animation
@@ -168,6 +170,37 @@ document.addEventListener('DOMContentLoaded', () => {
             albumArt.style.animation = 'none';
             albumArt.offsetHeight; /* trigger reflow */
             albumArt.style.animation = 'pulse 2s infinite';
+        }
+    }
+
+    function handlePlayError(error, file) {
+        // Try to reload the URL if it's expired
+        if (error.name === 'NotSupportedError' || error.message.includes('404') || error.message.includes('403')) {
+            console.log('Attempting to get fresh URL for:', file.name);
+            currentTitle.textContent = '正在刷新链接...';
+            fetch('/api/playlist')
+                .then(res => res.json())
+                .then(files => {
+                    const freshFile = files.find(f => f.name === file.name);
+                    if (freshFile) {
+                        console.log('Got fresh URL:', freshFile.url);
+                        audioPlayer.src = freshFile.url;
+                        audioPlayer.play().catch(e => {
+                            console.error('Retry failed:', e);
+                            showPlayOverlay(() => audioPlayer.play());
+                        });
+                    } else {
+                        currentTitle.textContent = '歌曲不存在或已隐藏';
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to get fresh URL:', err);
+                    showPlayOverlay(() => audioPlayer.play());
+                });
+        } else {
+            // Show a "Click to Play" overlay if blocked by browser policy
+            console.log('Browser policy blocked autoplay, showing overlay');
+            showPlayOverlay(() => audioPlayer.play());
         }
     }
 

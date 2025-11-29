@@ -45,7 +45,7 @@ setInterval(() => {
 }, CLEANUP_INTERVAL);
 
 // Generate obfuscated signed URL for media access
-function generateSignedUrl(filename, duration = 300000) { // 5 minutes for better compatibility
+function generateSignedUrl(filename, req = null, duration = 300000) { // 5 minutes for better compatibility
     const timestamp = Date.now();
     const random = crypto.randomBytes(16).toString('hex');
     const expiry = timestamp + duration;
@@ -63,7 +63,16 @@ function generateSignedUrl(filename, duration = 300000) { // 5 minutes for bette
     const params = Buffer.from(`${random}:${signature}:${expiry}`).toString('base64')
         .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 
-    return `/api/stream/${params}`;
+    const relativePath = `/api/stream/${params}`;
+
+    // If request object is provided, generate absolute URL for mobile compatibility
+    if (req) {
+        const protocol = req.protocol;
+        const host = req.get('host');
+        return `${protocol}://${host}${relativePath}`;
+    }
+
+    return relativePath;
 }
 
 // Verify obfuscated signed URL
@@ -455,7 +464,7 @@ app.get('/api/playlist', (req, res) => {
             return ['.mp3', '.wav', '.ogg', '.m4a'].includes(ext) && !hiddenFiles.includes(file);
         }).map(file => ({
             name: file,
-            url: generateSignedUrl(file) // Use signed URL instead of direct path
+            url: generateSignedUrl(file, req) // Pass req for absolute URL
         }));
 
         res.json(musicFiles);
@@ -621,7 +630,7 @@ app.get('/api/admin/playlist', checkAuth, (req, res) => {
             return ['.mp3', '.wav', '.ogg', '.m4a'].includes(ext);
         }).map(file => ({
             name: file,
-            url: generateSignedUrl(file), // Use signed URL for admin too
+            url: generateSignedUrl(file, req), // Use signed URL for admin too
             hidden: hiddenFiles.includes(file)
         }));
 
