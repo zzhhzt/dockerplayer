@@ -70,14 +70,86 @@
 
         <div class="card list-card">
             <h3>📂 现有歌曲列表</h3>
-            <ul id="fileList" class="file-list">
-                <!-- Files will be listed here -->
-            </ul>
-        </div>
-    </div>
+            <!DOCTYPE html>
+            <html lang="zh-CN">
 
-    <script src="https://cdn.jsdelivr.net/npm/easyqrcodejs@4.6.1/dist/easy.qrcode.min.js"></script>
-    <script src="admin.js"></script>
-</body>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>后台管理 | Scan to Listen</title>
+                <link rel="stylesheet" href="style.css">
+                <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+            </head>
 
-</html>
+            <body>
+                <!-- Login Modal -->
+                <div id="loginModal" class="modal">
+                    <div class="modal-content">
+                        <h2>🔐 管理员登录</h2>
+                        <p>请输入密码以管理音乐文件</p>
+                        <input type="password" id="passwordInput" placeholder="输入密码">
+                        <button id="loginBtn">登录</button>
+                        <p id="loginError" class="error"></p>
+                    </div>
+                </div>
+
+                <!-- QR Code Modal -->
+                <div id="qrModal" class="modal" style="display: none;">
+                    <div class="modal-content qr-modal-content">
+                        <span class="close-btn" id="closeQrModal">&times;</span>
+                        <h2>📱 扫码听歌</h2>
+
+                        <div class="qr-controls">
+                            <div class="control-group">
+                                <label>前景色:</label>
+                                <input type="color" id="qrColorDark" value="#000000">
+                            </div>
+                            <div class="control-group">
+                                <label>背景色:</label>
+                                <input type="color" id="qrColorLight" value="#ffffff">
+                            </div>
+                            <div class="control-group">
+                                <label>Logo:</label>
+                                <input type="file" id="qrLogoInput" accept="image/*">
+                            </div>
+                            <div class="control-group">
+                                <label>标题:</label>
+                                <input type="text" id="qrTitleInput" placeholder="输入标题">
+                            </div>
+                        </div>
+
+                        <div id="qrcode"></div>
+                        <p id="qrSongName" style="margin-top: 10px; font-weight: bold;"></p>
+                        <p style="font-size: 0.9em; color: #666;">请使用手机扫描上方二维码</p>
+                    </div>
+                </div>
+
+                <!-- Admin Dashboard -->
+                <div class="container" id="dashboard" style="display: none;">
+                    <header>
+                        <h1>🎛️ 音乐管理后台</h1>
+                        <button id="logoutBtn" class="secondary-btn">退出登录</button>
+                    </header>
+
+                    <div class="card upload-card">
+                        <h3>📤 上传新音乐</h3>
+                        <div class="upload-area">
+                            <input type="file" id="fileInput" accept=".mp3,.wav,.ogg,.m4a">
+                            <button id="uploadBtn">上传文件</button>
+                        </div>
+                        <p id="uploadStatus"></p>
+                    </div>
+
+                    <div class="card list-card">
+                        <h3>📂 现有歌曲列表</h3>
+                        <ul id="fileList" class="file-list">
+                            <!-- Files will be listed here -->
+                        </ul>
+                    </div>
+                </div>
+
+                <script src="https://cdn.jsdelivr.net/npm/easyqrcodejs@4.6.1/dist/easy.qrcode.min.js"></script>
+                <script src="admin.js?v=2"></script>
+            </body>
+
+            </html>
